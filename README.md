@@ -101,7 +101,7 @@ services:
         constraints: [node.role == manager]
     environment:
       KEEPALIVED_GROUP: "production"
-      KEEPALIVED_VIRTUAL_IPS: "192.168.1.231, 192.168.1.232"
+      KEEPALIVED_VIRTUAL_IPS: "192.168.1.231,192.168.1.232"
       KEEPALIVED_INTERFACE: "eth0"
       KEEPALIVED_PASSWORD: "8cteD88Hq4SZpPxm"
       KEEPALIVED_ROUTER_ID: "51"
@@ -117,7 +117,7 @@ networks:
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `KEEPALIVED_GROUP` | Node label group to filter nodes | `""` | **Yes** |
-| `KEEPALIVED_VIRTUAL_IPS` | Virtual IPs for keepalived | `""` | **Yes** |
+| `KEEPALIVED_VIRTUAL_IPS` | Virtual IPs for keepalived (comma-separated) | `""` | **Yes** |
 | `KEEPALIVED_IMAGE` | Keepalived image to use | `osixia/keepalived:2.0.20` | No |
 | `KEEPALIVED_INTERFACE` | Network interface | Auto-detected | No |
 | `KEEPALIVED_PASSWORD` | VRRP password | `""` | No |
@@ -125,6 +125,8 @@ networks:
 | `KEEPALIVED_NOTIFY` | Notification script | `/container/service/keepalived/assets/notify.sh` | No |
 | `KEEPALIVED_COMMAND_LINE_ARGUMENTS` | Keepalived arguments | `--log-detail --dump-conf` | No |
 | `KEEPALIVED_STATE` | Initial state | `BACKUP` | No |
+
+**Note**: The operator automatically converts `KEEPALIVED_VIRTUAL_IPS` from comma-separated format to the required `#PYTHON2BASH:['ip1','ip2']` format. It also automatically generates `KEEPALIVED_UNICAST_PEERS` based on the IPs of all nodes in the same keepalived group.
 
 ## How It Works
 
@@ -143,6 +145,15 @@ The operator manages priorities for keepalived services based on node labels:
 - **Custom Priorities**: If a node has `KEEPALIVED_PRIORITY` label, that value is used
 - **Default Priority**: If no custom priority is set, default priority 100 is used
 - **Manual Control**: You have full control over priority assignment through node labels
+
+## Environment Variable Format
+
+The operator handles the conversion of environment variables to the format required by osixia/keepalived:
+
+- **Input**: `KEEPALIVED_VIRTUAL_IPS="192.168.1.231,192.168.1.232"`
+- **Converted to**: `KEEPALIVED_VIRTUAL_IPS="#PYTHON2BASH:['192.168.1.231','192.168.1.232']"`
+
+- **Generated**: `KEEPALIVED_UNICAST_PEERS="#PYTHON2BASH:['peer_ip1','peer_ip2']"` (automatically built from node IPs)
 
 ## Testing Deployment
 

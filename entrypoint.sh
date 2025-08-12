@@ -39,6 +39,7 @@ get_current_services() {
 create_keepalived_service() {
     local node="$1"
     local service_name="$2"
+    local group="$3"
 
     # Get priority from node label, default to 100 if not set
     local node_priority="$(docker node inspect "$node" --format '{{.Spec.Labels.KEEPALIVED_PRIORITY}}' 2>/dev/null || echo "")"
@@ -53,7 +54,37 @@ create_keepalived_service() {
     # Get node IP
     local node_ip="$(docker node inspect "$node" --format '{{if .ManagerStatus}}{{.ManagerStatus.Addr}}{{else}}{{.Status.Addr}}{{end}}' 2>/dev/null | cut -d: -f1)"
 
+    # Build UNICAST_PEERS list from all matching nodes
+    local matching_nodes="$(get_matching_nodes "$group")"
+    local unicast_peers=""
+    for peer_node in $matching_nodes; do
+        if [ "$peer_node" != "$node" ]; then
+            local peer_ip="$(docker node inspect "$peer_node" --format '{{if .ManagerStatus}}{{.ManagerStatus.Addr}}{{else}}{{.Status.Addr}}{{end}}' 2>/dev/null | cut -d: -f1)"
+            if [ -z "$unicast_peers" ]; then
+                unicast_peers="'$peer_ip'"
+            else
+                unicast_peers="$unicast_peers,'$peer_ip'"
+            fi
+        fi
+    done
+    local keepalived_unicast_peers="#PYTHON2BASH:[$unicast_peers]"
+
+    # Format VIRTUAL_IPS
+    local virtual_ips_formatted=""
+    local ips_array=""
+    for ip in $(echo "$KEEPALIVED_VIRTUAL_IPS" | tr ',' ' '); do
+        ip=$(echo "$ip" | xargs)  # trim whitespace
+        if [ -z "$ips_array" ]; then
+            ips_array="'$ip'"
+        else
+            ips_array="$ips_array,'$ip'"
+        fi
+    done
+    virtual_ips_formatted="#PYTHON2BASH:[$ips_array]"
+
     echo "Creating keepalived service $service_name for node $node (IP: $node_ip) with priority: $priority"
+    echo "UNICAST_PEERS: $keepalived_unicast_peers"
+    echo "VIRTUAL_IPS: $virtual_ips_formatted"
 
     # Create service
     docker service create \
@@ -68,11 +99,11 @@ create_keepalived_service() {
         --env KEEPALIVED_PRIORITY="$priority" \
         --env KEEPALIVED_ROUTER_ID="$KEEPALIVED_ROUTER_ID" \
         --env KEEPALIVED_IP="$node_ip" \
-        --env KEEPALIVED_UNICAST_PEERS="$KEEPALIVED_UNICAST_PEERS" \
-        --env KEEPALIVED_VIRTUAL_IPS="$KEEPALIVED_VIRTUAL_IPS" \
-        --env KEEPALIVED_NOTIFY="$KEEPALIVED_NOTIFY" \
-        --env KEEPALIVED_COMMAND_LINE_ARGUMENTS="$KEEPALIVED_COMMAND_LINE_ARGUMENTS" \
-        --env KEEPALIVED_STATE="$KEEPALIVED_STATE" \
+        --env KEEPALIVED_UNICAST_PEERS="$keepalived_unicast_peers" \
+        --env KEEPALIVED_VIRTUAL_IPS="$virtual_ips_formatted" \
+        --env KEEPALIVED_NOTIFY="${KEEPALIVED_NOTIFY:-/container/service/keepalived/assets/notify.sh}" \
+        --env KEEPALIVED_COMMAND_LINE_ARGUMENTS="${KEEPALIVED_COMMAND_LINE_ARGUMENTS:---log-detail --dump-conf}" \
+        --env KEEPALIVED_STATE="${KEEPALIVED_STATE:-BACKUP}" \
         "${KEEPALIVED_IMAGE:-osixia/keepalived:2.0.20}" >/dev/null 2>&1
 
     if [ $? -eq 0 ]; then
@@ -153,7 +184,7 @@ sync_keepalived_services() {
 
         if [ "$service_exists" = false ]; then
             echo "Node $node has new keepalived_group=$group label, creating service"
-            create_keepalived_service "$node" "$service_name"
+            create_keepalived_service "$node" "$service_name" "$group"
         fi
     done
 

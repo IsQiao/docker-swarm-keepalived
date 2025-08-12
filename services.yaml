@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   keepalived_operator:
-    image: ghcr.io/isqiao/keepalived-swarm:0043c364
+    image: ghcr.io/isqiao/keepalived-swarm:0e7b1ea9
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -14,7 +14,7 @@ services:
         constraints: [node.role == manager]
     environment:
       KEEPALIVED_GROUP: "production"
-      KEEPALIVED_VIRTUAL_IPS: "192.168.31.201, 192.168.1.202"
+      KEEPALIVED_VIRTUAL_IPS: "192.168.31.201,192.168.1.202"
       KEEPALIVED_INTERFACE: "ens18"
       KEEPALIVED_PASSWORD: "8cteD88Hq4SZpPxm"
       KEEPALIVED_ROUTER_ID: "51"
