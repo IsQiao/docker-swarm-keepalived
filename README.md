@@ -10,12 +10,26 @@ Operator for [keepalived](https://github.com/acassen/keepalived) on docker swarm
 
 Uses [osixia/docker-keepalived](https://github.com/osixia/docker-keepalived).
 
+## Architecture
+
+This project consists of two components:
+
+1. **Operator** (this container): Must run on a manager node to manage the cluster
+   - Discovers nodes with matching `keepalived_group` labels
+   - Creates and manages keepalived services across the cluster
+   - Monitors service health
+
+2. **Keepalived Services**: Can run on any node (manager or worker)
+   - Actual keepalived instances providing VRRP functionality
+   - Only deployed on nodes with matching `keepalived_group` labels
+   - Handle virtual IP failover
+
 ## Features
 
 - **Operator Mode**: Run a single operator instance on master node to manage the entire cluster
 - **Group-based Deployment**: Only deploy keepalived services on nodes with matching `keepalived_group` label
-- **Automatic Service Creation**: Automatically creates keepalived services for each matching manager node
-- **Priority Management**: Automatically assigns priorities (leader gets highest priority)
+- **Automatic Service Creation**: Automatically creates keepalived services for each matching node (manager or worker)
+- **Priority Management**: Uses node label values or default priority 100
 - **Service Monitoring**: Continuous monitoring of keepalived services
 
 ## Usage
@@ -32,10 +46,10 @@ lsmod | grep -P '^ip_vs\s' || (echo "modprobe ip_vs" >> /etc/modules && modprobe
 Before deploying, you need to label the nodes where you want to run keepalived services:
 
 ```sh
-# Label nodes that should run keepalived services
-docker node update node1 --label-add keepalived_group=production
-docker node update node2 --label-add keepalived_group=production
-docker node update node3 --label-add keepalived_group=production
+# Label nodes that should run keepalived services (can be manager or worker nodes)
+docker node update vm1 --label-add keepalived_group=production
+docker node update vm2 --label-add keepalived_group=production
+docker node update vm3 --label-add keepalived_group=production
 
 # Optionally set custom priorities for nodes
 docker node update node1 --label-add KEEPALIVED_PRIORITY=100
@@ -114,11 +128,13 @@ networks:
 
 ## How It Works
 
-1. **Single Instance**: Only one operator instance runs on the master node
-2. **Group Filtering**: Discovers manager nodes with matching `keepalived_group` label
-3. **Service Creation**: Creates keepalived services only on matching nodes
-4. **Priority Assignment**: Uses node label values or default priority 100
-5. **Monitoring**: Continuously monitors service health and status
+1. **Operator Deployment**: The operator runs as a single instance on the swarm leader (manager node)
+2. **Node Discovery**: Discovers all nodes (manager and worker) with matching `keepalived_group` label
+3. **Service Creation**: Creates individual keepalived services, each constrained to run on specific matching nodes
+4. **Priority Assignment**: Uses node label values or default priority 100 for VRRP election
+5. **Monitoring**: Continuously monitors keepalived service health and status
+
+**Important**: The operator itself must run on a manager node (to access Docker API), but the keepalived services it creates can run on any labeled node in the cluster.
 
 ### Priority Management
 

@@ -4,35 +4,45 @@ set -e -o pipefail
 
 echo "Running in operator mode, managing keepalived services across the cluster..."
 
-# Get all manager nodes
-manager_nodes="$(docker node ls --filter role=manager --format '{{.Hostname}}')"
+# Check if current node is a manager
+if ! docker node ls >/dev/null 2>&1; then
+    echo "Error: Operator must run on a manager node" >&2
+    exit 1
+fi
 
-# Get current node information
+# Get all nodes in the cluster
+all_nodes="$(docker node ls --format '{{.Hostname}}')"
 current_node="$(docker node ls --filter role=manager --format '{{.Hostname}}' | head -1)"
-
-echo "Current manager node: $current_node"
-echo "All manager nodes: $manager_nodes"
 
 # Check if current node is the leader
 if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}')" = "true" ]; then
-    echo "Current node is the leader, starting cluster management..."
-    
-    # Get cluster configuration
     if [ -z "$KEEPALIVED_VIRTUAL_IPS" ]; then
         echo "Error: KEEPALIVED_VIRTUAL_IPS environment variable must be set" >&2
         exit 1
     fi
-    
+
     if [ -z "$KEEPALIVED_GROUP" ]; then
         echo "Error: KEEPALIVED_GROUP environment variable must be set" >&2
         exit 1
     fi
-    
+
     echo "Looking for nodes with keepalived_group=$KEEPALIVED_GROUP"
-    
+
+    # Print all nodes and their labels
+    echo "All nodes and their labels:"
+    for node in $all_nodes; do
+        node_labels="$(docker node inspect "$node" --format '{{range $k, $v := .Spec.Labels}}{{$k}}={{$v}} {{end}}')"
+        if [ -n "$node_labels" ]; then
+            echo "  $node: $node_labels"
+        else
+            echo "  $node: (no labels)"
+        fi
+    done
+    echo ""
+
     # Filter nodes by keepalived_group label
     matching_nodes=""
-    for node in $manager_nodes; do
+    for node in $all_nodes; do
         node_group="$(docker node inspect "$node" --format '{{.Spec.Labels.keepalived_group}}')"
         if [ "$node_group" = "$KEEPALIVED_GROUP" ]; then
             if [ -z "$matching_nodes" ]; then
@@ -43,19 +53,19 @@ if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}'
             echo "Node $node matches keepalived_group=$KEEPALIVED_GROUP"
         fi
     done
-    
+
     if [ -z "$matching_nodes" ]; then
         echo "Error: No nodes found with keepalived_group=$KEEPALIVED_GROUP" >&2
         exit 1
     fi
-    
+
     echo "Found matching nodes: $matching_nodes"
-    
+
     # Create keepalived service for each matching node
     node_index=0
     for node in $matching_nodes; do
         node_index=$((node_index + 1))
-        
+
         # Get priority from node label, default to 100 if not set
         node_priority="$(docker node inspect "$node" --format '{{.Spec.Labels.KEEPALIVED_PRIORITY}}')"
         if [ -n "$node_priority" ] && [ "$node_priority" != "<no value>" ]; then
@@ -65,15 +75,15 @@ if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}'
             priority=100
             echo "Using default priority: $priority"
         fi
-        
-        # Get node IP
-        node_ip="$(docker node inspect "$node" --format '{{.ManagerStatus.Addr}}' | cut -d: -f1)"
-        
+
+        # Get node IP (try ManagerStatus.Addr first for manager nodes, then Status.Addr for all nodes)
+        node_ip="$(docker node inspect "$node" --format '{{if .ManagerStatus.Addr}}{{.ManagerStatus.Addr}}{{else}}{{.Status.Addr}}{{end}}' | cut -d: -f1)"
+
         echo "Creating keepalived service for node $node (IP: $node_ip) with priority: $priority"
-        
+
         # Create keepalived service
         service_name="keepalived-node-${node_index}"
-        
+
         # Check if service already exists
         if ! docker service ls --filter name="$service_name" --format '{{.Name}}' | grep -q "$service_name"; then
             # Create service
@@ -95,15 +105,15 @@ if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}'
                 --env KEEPALIVED_COMMAND_LINE_ARGUMENTS="$KEEPALIVED_COMMAND_LINE_ARGUMENTS" \
                 --env KEEPALIVED_STATE="$KEEPALIVED_STATE" \
                 "$KEEPALIVED_IMAGE"
-            
+
             echo "Service $service_name created successfully"
         else
             echo "Service $service_name already exists, skipping creation"
         fi
     done
-    
+
     echo "Cluster management completed, all keepalived services created for group $KEEPALIVED_GROUP"
-    
+
     # Monitor service status
     echo "Starting keepalived service monitoring..."
     while true; do
@@ -111,7 +121,7 @@ if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}'
         docker service ls --filter name=keepalived-node
         sleep 30
     done
-    
+
 else
     echo "Current node is not the leader, waiting for leader to manage cluster..."
     # Non-leader nodes wait
