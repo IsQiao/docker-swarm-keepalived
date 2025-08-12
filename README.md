@@ -1,95 +1,119 @@
-# docker-swarm-keepalived
+# Docker Swarm Keepalived Operator
 
-[![Build Workflow](https://github.com/lhns/docker-swarm-keepalived/workflows/build/badge.svg)](https://github.com/lhns/docker-swarm-keepalived/actions?query=workflow%3Abuild)
-[![Docker Stars](https://img.shields.io/docker/stars/lolhens/keepalived-swarm)](https://hub.docker.com/r/lolhens/keepalived-swarm)
-[![Docker Pulls](https://img.shields.io/docker/pulls/lolhens/keepalived-swarm)](https://hub.docker.com/r/lolhens/keepalived-swarm)
-[![Docker Image Size](https://img.shields.io/docker/image-size/lolhens/keepalived-swarm)](https://hub.docker.com/r/lolhens/keepalived-swarm)
-[![Apache License 2.0](https://img.shields.io/github/license/lhns/docker-swarm-keepalived.svg?maxAge=3600)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Build Workflow](https://github.com/isqiao/docker-swarm-keepalived/workflows/build/badge.svg)](https://github.com/isqiao/docker-swarm-keepalived/actions?query=workflow%3Abuild)
+[![Docker Stars](https://img.shields.io/docker/stars/pubimgs/keepalived-swarm-operator)](https://hub.docker.com/r/pubimgs/keepalived-swarm-operator)
+[![Docker Pulls](https://img.shields.io/docker/pulls/pubimgs/keepalived-swarm-operator)](https://hub.docker.com/r/pubimgs/keepalived-swarm-operator)
+[![Docker Image Size](https://img.shields.io/docker/image-size/pubimgs/keepalived-swarm-operator)](https://hub.docker.com/r/pubimgs/keepalived-swarm-operator)
+[![Apache License 2.0](https://img.shields.io/github/license/isqiao/docker-swarm-keepalived.svg?maxAge=3600)](https://www.apache.org/licenses/LICENSE-2.0)
 
-Operator for [keepalived](https://github.com/acassen/keepalived) on docker swarm.
+A smart [Keepalived](https://github.com/acassen/keepalived) operator designed specifically for Docker Swarm, providing high-availability virtual IP management solution.
 
-Uses [osixia/docker-keepalived](https://github.com/osixia/docker-keepalived).
+Built on top of [osixia/docker-keepalived](https://github.com/osixia/docker-keepalived).
 
-## Architecture
+## 🏗️ Architecture
 
-This project consists of two components:
+This project follows the operator pattern with two core components:
 
-1. **Operator** (this container): Must run on a manager node to manage the cluster
-   - Discovers nodes with matching `keepalived_group` labels
-   - Creates and manages keepalived services across the cluster
-   - Monitors service health
+### 1. Keepalived Operator (This Container)
+- **Deployment**: Must run on Manager nodes
+- **Core Features**:
+  - Auto-discovers nodes with `keepalived_group` labels
+  - Dynamically creates and manages keepalived services across the cluster
+  - Real-time service health monitoring
+  - Handles node label changes and service synchronization
 
-2. **Keepalived Services**: Can run on any node (manager or worker)
-   - Actual keepalived instances providing VRRP functionality
-   - Only deployed on nodes with matching `keepalived_group` labels
-   - Handle virtual IP failover
+### 2. Keepalived Service Instances
+- **Deployment**: Can run on any node (Manager or Worker)
+- **Core Features**:
+  - Provides actual VRRP protocol functionality
+  - Only deployed on nodes matching `keepalived_group` labels
+  - Handles virtual IP failover
 
-## Features
+## ✨ Key Features
 
-- **Operator Mode**: Run a single operator instance on master node to manage the entire cluster
-- **Group-based Deployment**: Only deploy keepalived services on nodes with matching `keepalived_group` label
-- **Automatic Service Creation**: Automatically creates keepalived services for each matching node (manager or worker)
-- **Priority Management**: Uses node label values or default priority 100
-- **Service Monitoring**: Continuous monitoring of keepalived services
+- **🎯 Smart Node Discovery**: Automatically identifies and manages nodes with specific labels
+- **🔄 Dynamic Service Management**: Real-time response to node label changes, auto-create/delete services
+- **⚖️ Flexible Priority Configuration**: Support custom VRRP priorities via node labels
+- **📊 Continuous Health Monitoring**: 24/7 keepalived service status monitoring
+- **🏷️ Group Management**: Support multi-environment deployments (production, staging, etc.)
+- **🔧 Auto Configuration**: Automatically generates UNICAST_PEERS and formats configurations
 
-## Usage
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Enable the "ip_vs" kernel module if not enabled
-```sh
-lsmod | grep -P '^ip_vs\s' || (echo "modprobe ip_vs" >> /etc/modules && modprobe ip_vs)
+Ensure the `ip_vs` kernel module is enabled:
+
+```bash
+# Check module status
+lsmod | grep -P '^ip_vs\s'
+
+# If not enabled, run the following
+echo "modprobe ip_vs" >> /etc/modules && modprobe ip_vs
 ```
 
 ### Node Labeling
 
-Before deploying, you need to label the nodes where you want to run keepalived services:
+Before deployment, label the nodes where you want to run keepalived services:
 
-```sh
-# Label nodes that should run keepalived services (can be manager or worker nodes)
-docker node update vm1 --label-add keepalived_group=production
-docker node update vm2 --label-add keepalived_group=production
-docker node update vm3 --label-add keepalived_group=production
+```bash
+# Label nodes for production environment
+docker node update node1 --label-add keepalived_group=production
+docker node update node2 --label-add keepalived_group=production
+docker node update node3 --label-add keepalived_group=production
 
-# Optionally set custom priorities for nodes
+# Optional: Set custom priorities (higher values = higher priority)
 docker node update node1 --label-add KEEPALIVED_PRIORITY=100
 docker node update node2 --label-add KEEPALIVED_PRIORITY=101
 docker node update node3 --label-add KEEPALIVED_PRIORITY=102
 
-# You can also use different groups for different environments
-docker node update node4 --label-add keepalived_group=staging
-docker node update node5 --label-add keepalived_group=staging
+# Support multi-environment deployments
+docker node update test-node1 --label-add keepalived_group=staging
+docker node update test-node2 --label-add keepalived_group=staging
+
+# Remove node labels (auto-cleanup corresponding services)
+docker node update node1 --label-rm keepalived_group
 ```
 
-### Deploy using docker-compose
+### Deployment Options
 
-```sh
-# Deploy using docker-compose
-docker stack deploy -c services.yaml keepalived
+#### Option 1: Using Docker Stack (Recommended)
 
-# Or deploy using docker service create
+```bash
+# Deploy using the provided services.yaml
+docker stack deploy -c services.yaml keepalived-stack
+```
+
+#### Option 2: Using Docker Service
+
+```bash
 docker service create \
   --name keepalived-operator \
   --constraint 'node.role==manager' \
   --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
   --network host \
   --env KEEPALIVED_GROUP=production \
-  --env KEEPALIVED_VIRTUAL_IPS="192.168.1.231,192.168.1.232" \
-  ghcr.io/lhns/keepalived-swarm
+  --env KEEPALIVED_VIRTUAL_IPS="192.168.1.201,192.168.1.202" \
+  --env KEEPALIVED_INTERFACE=eth0 \
+  --env KEEPALIVED_PASSWORD=your_secure_password \
+  ghcr.io/isqiao/keepalived-swarm-operator:latest
 ```
 
-## Docker Images
+## 📦 Docker Images
 
-https://github.com/lhns/docker-swarm-keepalived/pkgs/container/keepalived-swarm
+- **GitHub Container Registry**: `ghcr.io/isqiao/keepalived-swarm-operator`
+- **Latest Version**: `ghcr.io/isqiao/keepalived-swarm-operator:latest`
 
-## Docker Stack Configuration
+## 📋 Configuration Examples
 
-```yml
+### Docker Stack Configuration
+
+```yaml
 version: '3.8'
 
 services:
-  keepalived-operator:
-    image: ghcr.io/lhns/keepalived-swarm
+  keepalived_operator:
+    image: ghcr.io/isqiao/keepalived-swarm-operator:latest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -100,11 +124,15 @@ services:
       placement:
         constraints: [node.role == manager]
     environment:
-      KEEPALIVED_GROUP: "production"
-      KEEPALIVED_VIRTUAL_IPS: "192.168.1.231,192.168.1.232"
-      KEEPALIVED_INTERFACE: "eth0"
-      KEEPALIVED_PASSWORD: "8cteD88Hq4SZpPxm"
-      KEEPALIVED_ROUTER_ID: "51"
+      # Required parameters
+      KEEPALIVED_GROUP: "production"                     # Node group name
+      KEEPALIVED_VIRTUAL_IPS: "192.168.1.201,192.168.1.202"  # Virtual IP list
+      
+      # Optional parameters
+      KEEPALIVED_INTERFACE: "eth0"                       # Network interface
+      KEEPALIVED_PASSWORD: "your_secure_password"        # VRRP password
+      KEEPALIVED_ROUTER_ID: "51"                         # Router ID
+      KEEPALIVED_IMAGE: "osixia/keepalived:2.0.20"      # Keepalived image
 
 networks:
   host:
@@ -112,63 +140,132 @@ networks:
     name: host
 ```
 
-## Environment Variables
+## ⚙️ Environment Variables
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `KEEPALIVED_GROUP` | Node label group to filter nodes | `""` | **Yes** |
-| `KEEPALIVED_VIRTUAL_IPS` | Virtual IPs for keepalived (comma-separated) | `""` | **Yes** |
-| `KEEPALIVED_IMAGE` | Keepalived image to use | `osixia/keepalived:2.0.20` | No |
-| `KEEPALIVED_INTERFACE` | Network interface | Auto-detected | No |
-| `KEEPALIVED_PASSWORD` | VRRP password | `""` | No |
+| `KEEPALIVED_GROUP` | Node label group name for filtering target nodes | `""` | **Yes** |
+| `KEEPALIVED_VIRTUAL_IPS` | Virtual IP address list (comma-separated) | `""` | **Yes** |
+| `KEEPALIVED_IMAGE` | Keepalived Docker image to use | `osixia/keepalived:2.0.20` | No |
+| `KEEPALIVED_INTERFACE` | Network interface name | Auto-detected | No |
+| `KEEPALIVED_PASSWORD` | VRRP authentication password | `""` | No |
 | `KEEPALIVED_ROUTER_ID` | VRRP router ID | `51` | No |
-| `KEEPALIVED_NOTIFY` | Notification script | `/container/service/keepalived/assets/notify.sh` | No |
-| `KEEPALIVED_COMMAND_LINE_ARGUMENTS` | Keepalived arguments | `--log-detail --dump-conf` | No |
+| `KEEPALIVED_NOTIFY` | State change notification script path | `/container/service/keepalived/assets/notify.sh` | No |
+| `KEEPALIVED_COMMAND_LINE_ARGUMENTS` | Keepalived startup arguments | `--log-detail --dump-conf` | No |
 | `KEEPALIVED_STATE` | Initial state | `BACKUP` | No |
 
-**Note**: The operator automatically converts `KEEPALIVED_VIRTUAL_IPS` from comma-separated format to the required `#PYTHON2BASH:['ip1','ip2']` format. It also automatically generates `KEEPALIVED_UNICAST_PEERS` based on the IPs of all nodes in the same keepalived group.
+> **Note**: The operator automatically converts `KEEPALIVED_VIRTUAL_IPS` from comma-separated format to osixia/keepalived's required `#PYTHON2BASH:['ip1','ip2']` format, and auto-generates `KEEPALIVED_UNICAST_PEERS` based on IPs of nodes in the same keepalived group.
 
-## How It Works
+## 🔄 How It Works
 
-1. **Operator Deployment**: The operator runs as a single instance on the swarm leader (manager node)
-2. **Node Discovery**: Discovers all nodes (manager and worker) with matching `keepalived_group` label
-3. **Service Creation**: Creates individual keepalived services, each constrained to run on specific matching nodes
-4. **Priority Assignment**: Uses node label values or default priority 100 for VRRP election
-5. **Monitoring**: Continuously monitors keepalived service health and status
+### Core Workflow
 
-**Important**: The operator itself must run on a manager node (to access Docker API), but the keepalived services it creates can run on any labeled node in the cluster.
+1. **Operator Startup**: Single operator instance starts on Swarm Manager node
+2. **Node Discovery**: Scans all nodes, identifies those with matching `keepalived_group` labels
+3. **Service Creation**: Creates individual keepalived service instances for each matching node
+4. **Priority Assignment**: Sets VRRP priorities based on node labels or default values
+5. **Continuous Monitoring**: Checks node label changes and service status every 10 seconds
 
-### Priority Management
+### Smart Management Features
 
-The operator manages priorities for keepalived services based on node labels:
+- **Dynamic Response**: Automatically creates/deletes services when nodes add/remove labels
+- **Fault Recovery**: Auto-rebuilds services when they fail
+- **Configuration Sync**: Auto-generates and updates UNICAST_PEERS lists
+- **Status Monitoring**: Real-time display of all node status and service operation
 
-- **Custom Priorities**: If a node has `KEEPALIVED_PRIORITY` label, that value is used
-- **Default Priority**: If no custom priority is set, default priority 100 is used
-- **Manual Control**: You have full control over priority assignment through node labels
+### Priority Management Strategy
 
-## Environment Variable Format
+The operator assigns VRRP priorities based on these rules:
 
-The operator handles the conversion of environment variables to the format required by osixia/keepalived:
+- **Custom Priority**: If node has `KEEPALIVED_PRIORITY` label, use that value
+- **Default Priority**: If no custom priority is set, use default value 100
+- **Full Control**: Complete control over priority assignment via node labels
 
-- **Input**: `KEEPALIVED_VIRTUAL_IPS="192.168.1.231,192.168.1.232"`
-- **Converted to**: `KEEPALIVED_VIRTUAL_IPS="#PYTHON2BASH:['192.168.1.231','192.168.1.232']"`
+## 📈 Monitoring and Debugging
 
-- **Generated**: `KEEPALIVED_UNICAST_PEERS="#PYTHON2BASH:['peer_ip1','peer_ip2']"` (automatically built from node IPs)
+### View Operator Status
 
-## Testing Deployment
+```bash
+# View operator logs
+docker service logs -f keepalived-operator
 
-Use the provided test script to verify your deployment:
+# View all keepalived services
+docker service ls --filter name=keepalived-node
 
-```sh
-./test-deployment.sh
+# View specific service logs
+docker service logs -f keepalived-node-node1-1
 ```
 
-## Helpful Links
+### Node Status Check
 
-- https://github.com/acassen/keepalived
-- https://github.com/osixia/docker-keepalived
-- https://geek-cookbook.funkypenguin.co.nz/ha-docker-swarm/keepalived/
+```bash
+# View all nodes and their labels
+docker node ls --format "table {{.ID}}\t{{.Hostname}}\t{{.Status}}\t{{.Availability}}\t{{.ManagerStatus}}"
 
-## License
+# View specific node details
+docker node inspect node1 --pretty
+```
 
-This project uses the Apache 2.0 License. See the file called LICENSE.
+### Troubleshooting
+
+```bash
+# Check network interfaces
+ip addr show
+
+# Check virtual IP status
+ip addr show | grep "192.168.1.201"
+
+# Test virtual IP connectivity
+ping -c 3 192.168.1.201
+```
+
+## 🧪 Testing Deployment
+
+You can verify your deployment by checking the following:
+
+```bash
+# Check if the operator is running
+docker service ls --filter name=keepalived
+
+# Check operator logs
+docker service logs -f keepalived_operator
+
+# Verify keepalived services are created for labeled nodes
+docker service ls --filter name=keepalived-node
+
+# Test virtual IP accessibility
+ping -c 3 192.168.1.201
+```
+
+## 📚 Related Resources
+
+- [Keepalived Official Documentation](https://github.com/acassen/keepalived)
+- [osixia/docker-keepalived](https://github.com/osixia/docker-keepalived)
+- [Original Project](https://github.com/lhns/docker-swarm-keepalived)
+- [Docker Swarm High Availability Guide](https://docs.docker.com/engine/swarm/admin_guide/)
+- [VRRP Protocol Specification](https://tools.ietf.org/html/rfc3768)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork this repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Create a Pull Request
+
+## 📄 License
+
+This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
+
+## 🙋‍♂️ Support
+
+If you have questions or suggestions, please reach out via:
+
+- Submit an [Issue](https://github.com/isqiao/docker-swarm-keepalived/issues)
+- Start a [Discussion](https://github.com/isqiao/docker-swarm-keepalived/discussions)
+
+---
+
+⭐ If this project helps you, please give it a Star to show your support!
