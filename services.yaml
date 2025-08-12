@@ -1,8 +1,8 @@
-version: '3.8'
+version: "3.8"
 
 services:
   keepalived-operator:
-    image: ghcr.io/lhns/keepalived-swarm
+    image: ghcr.io/isqiao/keepalived-swarm:2b900c7d
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
