@@ -2,86 +2,89 @@
 
 set -e -o pipefail
 
-nodes_metadata="$(while IFS= read -r node; do docker node inspect "$(echo "$node" | jq -r .ID)" | jq -c --argjson node "$node" '.[]|.+{Self:$node.Self}'; done < <(docker node ls --format '{{json .}}') | jq -sc .)"
-node_labels="$(echo "$nodes_metadata" | jq -c 'map(select(.Self))[0].Spec.Labels')"
+echo "Running in operator mode, managing keepalived services across the cluster..."
 
-if [ -z "$KEEPALIVED_INTERFACE" ]; then
-  KEEPALIVED_INTERFACE="$(echo "$node_labels" | jq -r '.KEEPALIVED_INTERFACE|select(.!=null)')"
-fi
-if [ -z "$KEEPALIVED_INTERFACE" ]; then
-  KEEPALIVED_INTERFACE="$(ip route get 1 | awk '{print $(NF-4);exit}')"
-fi
-export KEEPALIVED_INTERFACE
+# Get all manager nodes
+manager_nodes="$(docker node ls --filter role=manager --format '{{.Hostname}}')"
 
-if [ -z "$KEEPALIVED_PASSWORD" ]; then
-  KEEPALIVED_PASSWORD='8cteD88Hq4SZpPxm'
-fi
-export KEEPALIVED_PASSWORD
+# Get current node information
+current_node="$(docker node ls --filter role=manager --format '{{.Hostname}}' | head -1)"
 
-if [ -z "$KEEPALIVED_PRIORITY" ]; then
-  KEEPALIVED_PRIORITY="$(echo "$node_labels" | jq -r '.KEEPALIVED_PRIORITY|select(.!=null)')"
-fi
-if [ -z "$KEEPALIVED_PRIORITY" ] || (( KEEPALIVED_PRIORITY < 0 || KEEPALIVED_PRIORITY > 255 )); then
-  echo "KEEPALIVED_PRIORITY must be set between 0 and 255!" >&2
-  exit 1
-fi
-export KEEPALIVED_PRIORITY
+echo "Current manager node: $current_node"
+echo "All manager nodes: $manager_nodes"
 
-if [ -z "$KEEPALIVED_ROUTER_ID" ]; then
-  KEEPALIVED_ROUTER_ID='51'
+# Check if current node is the leader
+if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}')" = "true" ]; then
+    echo "Current node is the leader, starting cluster management..."
+    
+    # Get cluster configuration
+    if [ -z "$KEEPALIVED_VIRTUAL_IPS" ]; then
+        echo "Error: KEEPALIVED_VIRTUAL_IPS environment variable must be set" >&2
+        exit 1
+    fi
+    
+    # Create keepalived service for each manager node
+    node_index=0
+    for node in $manager_nodes; do
+        node_index=$((node_index + 1))
+        
+        # Calculate priority (leader highest, others decreasing)
+        if [ "$node" = "$current_node" ]; then
+            priority=200
+        else
+            priority=$((200 - node_index))
+        fi
+        
+        # Get node IP
+        node_ip="$(docker node inspect "$node" --format '{{.ManagerStatus.Addr}}' | cut -d: -f1)"
+        
+        echo "Creating keepalived service for node $node (IP: $node_ip) with priority: $priority"
+        
+        # Create keepalived service
+        service_name="keepalived-node-${node_index}"
+        
+        # Check if service already exists
+        if ! docker service ls --filter name="$service_name" --format '{{.Name}}' | grep -q "$service_name"; then
+            # Create service
+            docker service create \
+                --name "$service_name" \
+                --constraint "node.hostname==$node" \
+                --network host \
+                --cap-add NET_ADMIN \
+                --cap-add NET_BROADCAST \
+                --cap-add NET_RAW \
+                --env KEEPALIVED_INTERFACE="$KEEPALIVED_INTERFACE" \
+                --env KEEPALIVED_PASSWORD="$KEEPALIVED_PASSWORD" \
+                --env KEEPALIVED_PRIORITY="$priority" \
+                --env KEEPALIVED_ROUTER_ID="$KEEPALIVED_ROUTER_ID" \
+                --env KEEPALIVED_IP="$node_ip" \
+                --env KEEPALIVED_UNICAST_PEERS="$KEEPALIVED_UNICAST_PEERS" \
+                --env KEEPALIVED_VIRTUAL_IPS="$KEEPALIVED_VIRTUAL_IPS" \
+                --env KEEPALIVED_NOTIFY="$KEEPALIVED_NOTIFY" \
+                --env KEEPALIVED_COMMAND_LINE_ARGUMENTS="$KEEPALIVED_COMMAND_LINE_ARGUMENTS" \
+                --env KEEPALIVED_STATE="$KEEPALIVED_STATE" \
+                "$KEEPALIVED_IMAGE"
+            
+            echo "Service $service_name created successfully"
+        else
+            echo "Service $service_name already exists, skipping creation"
+        fi
+    done
+    
+    echo "Cluster management completed, all keepalived services created"
+    
+    # Monitor service status
+    echo "Starting keepalived service monitoring..."
+    while true; do
+        echo "=== $(date) ==="
+        docker service ls --filter name=keepalived-node
+        sleep 30
+    done
+    
+else
+    echo "Current node is not the leader, waiting for leader to manage cluster..."
+    # Non-leader nodes wait
+    while true; do
+        sleep 60
+    done
 fi
-export KEEPALIVED_ROUTER_ID
-
-if [ -z "$KEEPALIVED_IP" ]; then
-  KEEPALIVED_IP="$(echo "$node_labels" | jq -r '.KEEPALIVED_IP|select(.!=null)')"
-fi
-if [ -z "$KEEPALIVED_IP" ]; then
-  KEEPALIVED_IP="$(echo "$nodes_metadata" | jq -r 'map(select(.Self))[0].ManagerStatus.Addr|select(.!=null)|split(":")[0]')"
-fi
-export KEEPALIVED_IP
-
-if [ -z "$KEEPALIVED_UNICAST_PEERS" ]; then
-  KEEPALIVED_UNICAST_PEERS="$(echo "$nodes_metadata" | jq -r 'map(.ManagerStatus.Addr|select(.!=null)|split(":")[0])|join(",")')"
-fi
-KEEPALIVED_UNICAST_PEERS="$(jq -nr --arg peers "$KEEPALIVED_UNICAST_PEERS" --arg ip "$KEEPALIVED_IP" '$peers|split(",\\s*";"")|map(select(.!=$ip)|"\u0027\(.)\u0027")|join(",")|"#PYTHON2BASH:[\(.)]"')"
-export KEEPALIVED_UNICAST_PEERS
-
-KEEPALIVED_VIRTUAL_IPS="$(jq -nr --arg ips "$KEEPALIVED_VIRTUAL_IPS" '$ips|split(",\\s*";"")|map("\u0027\(.)\u0027")|join(",")|"#PYTHON2BASH:[\(.)]"')"
-export KEEPALIVED_VIRTUAL_IPS
-
-if [ -z "$KEEPALIVED_NOTIFY" ]; then
-  KEEPALIVED_NOTIFY='/container/service/keepalived/assets/notify.sh'
-fi
-export KEEPALIVED_NOTIFY
-
-if [ -z "$KEEPALIVED_COMMAND_LINE_ARGUMENTS" ]; then
-  KEEPALIVED_COMMAND_LINE_ARGUMENTS='--log-detail --dump-conf'
-fi
-export KEEPALIVED_COMMAND_LINE_ARGUMENTS
-
-if [ -z "$KEEPALIVED_STATE" ]; then
-  KEEPALIVED_STATE='BACKUP'
-fi
-export KEEPALIVED_STATE
-
-if [ -z "$KEEPALIVED_CONTAINER_NAME" ]; then
-  container_id="$(cat /proc/self/mountinfo | grep "/docker/containers/" | head -1 | sed -E 's/.*?\/docker\/containers\/([^/]*?).*/\1/')"
-  KEEPALIVED_CONTAINER_NAME="keepalived-$container_id"
-fi
-export KEEPALIVED_CONTAINER_NAME
-
-exec docker run -i --sig-proxy --rm --name "$KEEPALIVED_CONTAINER_NAME" \
-  --net=host \
-  --cap-add=NET_ADMIN \
-  --cap-add=NET_BROADCAST \
-  --cap-add=NET_RAW \
-  -e KEEPALIVED_INTERFACE \
-  -e KEEPALIVED_PASSWORD \
-  -e KEEPALIVED_PRIORITY \
-  -e KEEPALIVED_ROUTER_ID \
-  -e KEEPALIVED_UNICAST_PEERS \
-  -e KEEPALIVED_VIRTUAL_IPS \
-  -e KEEPALIVED_NOTIFY \
-  -e KEEPALIVED_COMMAND_LINE_ARGUMENTS \
-  -e KEEPALIVED_STATE \
-  "$1"
