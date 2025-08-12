@@ -1,10 +1,10 @@
-# Docker Swarm Keepalived Operator
+# Keepalived Docker Swarm Operator
 
-[![Build Workflow](https://github.com/isqiao/docker-swarm-keepalived/workflows/build/badge.svg)](https://github.com/isqiao/docker-swarm-keepalived/actions?query=workflow%3Abuild)
+[![Build Workflow](https://github.com/isqiao/keepalived-docker-swarm-operator/workflows/build/badge.svg)](https://github.com/isqiao/keepalived-docker-swarm-operator/actions?query=workflow%3Abuild)
 [![Docker Stars](https://img.shields.io/docker/stars/pubimgs/keepalived-swarm-operator)](https://hub.docker.com/r/pubimgs/keepalived-swarm-operator)
 [![Docker Pulls](https://img.shields.io/docker/pulls/pubimgs/keepalived-swarm-operator)](https://hub.docker.com/r/pubimgs/keepalived-swarm-operator)
 [![Docker Image Size](https://img.shields.io/docker/image-size/pubimgs/keepalived-swarm-operator)](https://hub.docker.com/r/pubimgs/keepalived-swarm-operator)
-[![Apache License 2.0](https://img.shields.io/github/license/isqiao/docker-swarm-keepalived.svg?maxAge=3600)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Apache License 2.0](https://img.shields.io/github/license/isqiao/keepalived-docker-swarm-operator.svg?maxAge=3600)](https://www.apache.org/licenses/LICENSE-2.0)
 
 A smart [Keepalived](https://github.com/acassen/keepalived) operator designed specifically for Docker Swarm, providing high-availability virtual IP management solution.
 
@@ -127,7 +127,7 @@ services:
       # Required parameters
       KEEPALIVED_GROUP: "production"                     # Node group name
       KEEPALIVED_VIRTUAL_IPS: "192.168.1.201,192.168.1.202"  # Virtual IP list
-      
+
       # Optional parameters
       KEEPALIVED_INTERFACE: "eth0"                       # Network interface
       KEEPALIVED_PASSWORD: "your_secure_password"        # VRRP password
@@ -263,8 +263,8 @@ This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE
 
 If you have questions or suggestions, please reach out via:
 
-- Submit an [Issue](https://github.com/isqiao/docker-swarm-keepalived/issues)
-- Start a [Discussion](https://github.com/isqiao/docker-swarm-keepalived/discussions)
+- Submit an [Issue](https://github.com/isqiao/keepalived-docker-swarm-operator/issues)
+- Start a [Discussion](https://github.com/isqiao/keepalived-docker-swarm-operator/discussions)
 
 ---
 
