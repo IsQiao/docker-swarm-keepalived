@@ -77,7 +77,7 @@ if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}'
         fi
 
         # Get node IP (try ManagerStatus.Addr first for manager nodes, then Status.Addr for all nodes)
-        node_ip="$(docker node inspect "$node" --format '{{if .ManagerStatus.Addr}}{{.ManagerStatus.Addr}}{{else}}{{.Status.Addr}}{{end}}' | cut -d: -f1)"
+        node_ip="$(docker node inspect "$node" --format '{{if .ManagerStatus}}{{.ManagerStatus.Addr}}{{else}}{{.Status.Addr}}{{end}}' | cut -d: -f1)"
 
         echo "Creating keepalived service for node $node (IP: $node_ip) with priority: $priority"
 
