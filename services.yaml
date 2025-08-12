@@ -12,18 +12,12 @@ services:
       replicas: 1
       placement:
         constraints: [node.role == manager]
-        preferences:
-          - spread: node.labels.zone
     environment:
-      OPERATOR_MODE: "true"
-      KEEPALIVED_IMAGE: "osixia/keepalived:2.0.20"
-      KEEPALIVED_INTERFACE: "eth0"
+      KEEPALIVED_GROUP: "production"
+      KEEPALIVED_VIRTUAL_IPS: "192.168.31.201, 192.168.1.202"
+      KEEPALIVED_INTERFACE: "ens18"
       KEEPALIVED_PASSWORD: "8cteD88Hq4SZpPxm"
       KEEPALIVED_ROUTER_ID: "51"
-      KEEPALIVED_VIRTUAL_IPS: "192.168.31.201, 192.168.1.202"
-      KEEPALIVED_NOTIFY: "/container/service/keepalived/assets/notify.sh"
-      KEEPALIVED_COMMAND_LINE_ARGUMENTS: "--log-detail --dump-conf"
-      KEEPALIVED_STATE: "BACKUP"
 
 networks:
   host:

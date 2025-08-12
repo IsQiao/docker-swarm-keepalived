@@ -23,16 +23,47 @@ if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}'
         exit 1
     fi
     
-    # Create keepalived service for each manager node
-    node_index=0
+    if [ -z "$KEEPALIVED_GROUP" ]; then
+        echo "Error: KEEPALIVED_GROUP environment variable must be set" >&2
+        exit 1
+    fi
+    
+    echo "Looking for nodes with keepalived_group=$KEEPALIVED_GROUP"
+    
+    # Filter nodes by keepalived_group label
+    matching_nodes=""
     for node in $manager_nodes; do
+        node_group="$(docker node inspect "$node" --format '{{.Spec.Labels.keepalived_group}}')"
+        if [ "$node_group" = "$KEEPALIVED_GROUP" ]; then
+            if [ -z "$matching_nodes" ]; then
+                matching_nodes="$node"
+            else
+                matching_nodes="$matching_nodes $node"
+            fi
+            echo "Node $node matches keepalived_group=$KEEPALIVED_GROUP"
+        fi
+    done
+    
+    if [ -z "$matching_nodes" ]; then
+        echo "Error: No nodes found with keepalived_group=$KEEPALIVED_GROUP" >&2
+        exit 1
+    fi
+    
+    echo "Found matching nodes: $matching_nodes"
+    
+    # Create keepalived service for each matching node
+    node_index=0
+    for node in $matching_nodes; do
         node_index=$((node_index + 1))
         
-        # Calculate priority (leader highest, others decreasing)
-        if [ "$node" = "$current_node" ]; then
-            priority=200
+        # Get priority from node label, default to 100 if not set
+        node_priority="$(docker node inspect "$node" --format '{{.Spec.Labels.KEEPALIVED_PRIORITY}}')"
+        if [ -n "$node_priority" ] && [ "$node_priority" != "<no value>" ]; then
+            priority="$node_priority"
+            echo "Using priority from node label: $priority"
         else
-            priority=$((200 - node_index))
+            priority=100
+            echo "Using default priority: $priority"
         fi
         
         # Get node IP
@@ -71,7 +102,7 @@ if [ "$(docker node inspect "$current_node" --format '{{.ManagerStatus.Leader}}'
         fi
     done
     
-    echo "Cluster management completed, all keepalived services created"
+    echo "Cluster management completed, all keepalived services created for group $KEEPALIVED_GROUP"
     
     # Monitor service status
     echo "Starting keepalived service monitoring..."
