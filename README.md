@@ -264,7 +264,6 @@ This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE
 If you have questions or suggestions, please reach out via:
 
 - Submit an [Issue](https://github.com/isqiao/keepalived-docker-swarm-operator/issues)
-- Start a [Discussion](https://github.com/isqiao/keepalived-docker-swarm-operator/discussions)
 
 ---
 
