@@ -103,6 +103,8 @@ docker service create \
 
 - **GitHub Container Registry**: `ghcr.io/isqiao/keepalived-swarm-operator`
 - **Latest Version**: `ghcr.io/isqiao/keepalived-swarm-operator:latest`
+- **Docker Hub**: `docker.io/pubimgs/keepalived-swarm-operator`
+- **Latest Version**: `docker.io/pubimgs/keepalived-swarm-operator:latest`
 
 ## 📋 Configuration Examples
 
@@ -125,14 +127,14 @@ services:
         constraints: [node.role == manager]
     environment:
       # Required parameters
-      KEEPALIVED_GROUP: "production"                     # Node group name
+      KEEPALIVED_GROUP: "production"                         # Node group name
       KEEPALIVED_VIRTUAL_IPS: "192.168.1.201,192.168.1.202"  # Virtual IP list
 
       # Optional parameters
-      KEEPALIVED_INTERFACE: "eth0"                       # Network interface
-      KEEPALIVED_PASSWORD: "your_secure_password"        # VRRP password
-      KEEPALIVED_ROUTER_ID: "51"                         # Router ID
-      KEEPALIVED_IMAGE: "osixia/keepalived:2.0.20"      # Keepalived image
+      KEEPALIVED_INTERFACE: "eth0"                           # Network interface
+      KEEPALIVED_PASSWORD: "your_secure_password"            # VRRP password
+      KEEPALIVED_ROUTER_ID: "51"                             # Router ID
+      KEEPALIVED_IMAGE: "osixia/keepalived:2.0.20"           # Keepalived image
 
 networks:
   host:
